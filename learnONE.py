@@ -1,9 +1,7 @@
-
 import logging
 import os
-from flask import Flask, request
 
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -12,15 +10,15 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 # ================= CONFIG =================
 
-BOT_TOKEN = os.environ.get("BOT_TOKEN")  # 🔐 аз Render
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
 ADMIN_ID = 6604953148
 
-WEBHOOK_PATH = f"/webhook/{BOT_TOKEN}"
+WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL") + WEBHOOK_PATH
+PORT = int(os.environ.get("PORT", 10000))
 
 # ================= LOGGING =================
 
@@ -54,9 +52,9 @@ TEXTS = {
             "— Телефон нишон дода намешавад\n\n"
             "/search нависед барои ҷустуҷӯ"
         ),
-        "search": "Дар ҷустуҷӯи шарик...\nБарои қатъ кардан /stop нависед",
-        "found": "✅ Шарик ёфт шуд! Метавонед суҳбат кунед.\nБарои қатъ кардан /stop нависед",
-        "stop": "❌ Чат қатъ шуд.\n/search нависед барои дубора",
+        "search": "🔍 Дар ҷустуҷӯи шарик...\n/stop — қатъ",
+        "found": "✅ Шарик ёфт шуд! Метавонед суҳбат кунед.\n/stop — қатъ",
+        "stop": "❌ Чат қатъ шуд.\n/search — дубора",
     },
     "fa": {
         "choose_lang": "زبان را انتخاب کنید:",
@@ -66,20 +64,18 @@ TEXTS = {
         "start": (
             "👋 خوش آمدید!\n\n"
             "🔒 شما کاملاً ناشناس هستید:\n"
-            "— نام شما نمایش داده نمی‌شود\n"
+            "— نام نمایش داده نمی‌شود\n"
             "— شماره تلفن نمایش داده نمی‌شود\n\n"
-            "برای جستجو /search بنویسید"
+            "/search برای جستجو"
         ),
-        "search": "در حال جستجوی شریک...\nبرای توقف /stop بنویسید",
-        "found": "✅ شریک پیدا شد! می‌توانید چت کنید.\nبرای توقف /stop بنویسید",
-        "stop": "❌ چت متوقف شد.\nبرای جستجوی دوباره /search",
+        "search": "🔍 در حال جستجو...\n/stop — توقف",
+        "found": "✅ شریک پیدا شد!\n/stop — توقف",
+        "stop": "❌ چت متوقف شد.\n/search — دوباره",
     }
 }
 
-SEARCH_EMOJI = "🔍"
-
 def t(user_id, key):
-    return TEXTS[USER_LANG.get(user_id, "tj")][key]
+    return TEXTS.get(USER_LANG.get(user_id, "tj"), TEXTS["tj"])[key]
 
 # ================= START =================
 
@@ -133,10 +129,10 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await update.message.reply_text(t(user_id, "search"))
-    await update.message.reply_text(SEARCH_EMOJI)
 
     if SEARCHING:
         other = SEARCHING.pop(0)
+
         PAIRS[user_id] = other
         PAIRS[other] = user_id
 
@@ -176,7 +172,6 @@ async def relay(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if update.message.text:
         await context.bot.send_message(partner, update.message.text)
-
     elif update.message.photo:
         await context.bot.send_photo(
             partner,
@@ -216,44 +211,32 @@ async def broadcast_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ADMIN_STATE.clear()
     await update.message.reply_text("✅ Broadcast анҷом ёфт")
 
-# ================= WEBHOOK =================
-
-flask_app = Flask(__name__)
-application = ApplicationBuilder().token(BOT_TOKEN).build()
-
-@flask_app.route("/")
-def index():
-    return "Bot is running ✅"
-
-@flask_app.route(WEBHOOK_PATH, methods=["POST"])
-async def webhook():
-    data = request.get_json(force=True)
-    update = Update.de_json(data, application.bot)
-    await application.process_update(update)
-    return "ok"
-
 # ================= MAIN =================
 
 def main():
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("search", search))
-    application.add_handler(CommandHandler("stop", stop))
-    application.add_handler(CommandHandler("broadcast", broadcast))
-    application.add_handler(CallbackQueryHandler(callback_handler))
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    application.add_handler(
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("search", search))
+    app.add_handler(CommandHandler("stop", stop))
+    app.add_handler(CommandHandler("broadcast", broadcast))
+
+    app.add_handler(CallbackQueryHandler(callback_handler))
+
+    app.add_handler(
         MessageHandler(filters.User(ADMIN_ID) & ~filters.COMMAND, broadcast_handler),
         group=0
     )
 
-    application.add_handler(
+    app.add_handler(
         MessageHandler(filters.ALL & ~filters.COMMAND, relay),
         group=1
     )
 
-    application.run_webhook(
+    logger.info("Starting webhook...")
+    app.run_webhook(
         listen="0.0.0.0",
-        port=int(os.environ.get("PORT", 10000)),
+        port=PORT,
         url_path=WEBHOOK_PATH,
         webhook_url=WEBHOOK_URL,
     )
