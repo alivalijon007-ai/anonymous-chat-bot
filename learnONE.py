@@ -53,6 +53,8 @@ TEXTS = {
             "/search нависед барои ҷустуҷӯ"
         ),
         "search": "🔍 Дар ҷустуҷӯи шарик...\n/stop — қатъ",
+        "searchemo": "🔍",
+
         "found": "✅ Шарик ёфт шуд! Метавонед суҳбат кунед.\n/stop — қатъ",
         "stop": "❌ Чат қатъ шуд.\n/search — дубора",
     },
@@ -69,6 +71,7 @@ TEXTS = {
             "/search برای جستجو"
         ),
         "search": "🔍 در حال جستجو...\n/stop — توقف",
+        "searchemo": "🔍",
         "found": "✅ شریک پیدا شد!\n/stop — توقف",
         "stop": "❌ چت متوقف شد.\n/search — دوباره",
     }
@@ -129,6 +132,9 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await update.message.reply_text(t(user_id, "search"))
+    await update.message.reply_dice(t(user_id, "searchemo"))
+
+
 
     if SEARCHING:
         other = SEARCHING.pop(0)
@@ -479,5 +485,6 @@ if __name__ == "__main__":
     logger.info("Starting webhook...")
     application.bot.set_webhook(WEBHOOK_URL)
     flask_app.run(host="0.0.0.0", port=PORT)
+
 
 
