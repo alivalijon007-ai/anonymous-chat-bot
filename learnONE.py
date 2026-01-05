@@ -1,4 +1,8 @@
+
 import logging
+import os
+from flask import Flask, request
+
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
@@ -12,8 +16,11 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 # ================= CONFIG =================
 
-BOT_TOKEN = "8486293912:AAGJirpJiX316PJlOIOVYtOKGdIPKVzrC9c"
+BOT_TOKEN = os.environ.get("BOT_TOKEN")  # 🔐 аз Render
 ADMIN_ID = 6604953148
+
+WEBHOOK_PATH = f"/webhook/{BOT_TOKEN}"
+WEBHOOK_URL = os.environ.get("WEBHOOK_URL") + WEBHOOK_PATH
 
 # ================= LOGGING =================
 
@@ -110,13 +117,9 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ]
         ])
 
-        await q.edit_message_text(
-            TEXTS[lang]["choose_gender"],
-            reply_markup=kb
-        )
-        return
+        await q.edit_message_text(TEXTS[lang]["choose_gender"], reply_markup=kb)
 
-    if q.data.startswith("gender:"):
+    elif q.data.startswith("gender:"):
         USER_GENDER[user_id] = q.data.split(":")[1]
         await q.edit_message_text(t(user_id, "start"))
 
@@ -134,7 +137,6 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if SEARCHING:
         other = SEARCHING.pop(0)
-
         PAIRS[user_id] = other
         PAIRS[other] = user_id
 
@@ -148,13 +150,11 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
-    # агар дар ҷустуҷӯ бошад
     if user_id in SEARCHING:
         SEARCHING.remove(user_id)
         await update.message.reply_text(t(user_id, "stop"))
         return
 
-    # агар дар чат бошад
     if user_id in PAIRS:
         partner = PAIRS.pop(user_id)
         PAIRS.pop(partner, None)
@@ -162,7 +162,7 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(user_id, t(user_id, "stop"))
         await context.bot.send_message(partner, t(partner, "stop"))
 
-# ================= RELAY (ДУҶОНИБА 100%) =================
+# ================= RELAY =================
 
 async def relay(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -216,32 +216,47 @@ async def broadcast_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ADMIN_STATE.clear()
     await update.message.reply_text("✅ Broadcast анҷом ёфт")
 
+# ================= WEBHOOK =================
+
+flask_app = Flask(__name__)
+application = ApplicationBuilder().token(BOT_TOKEN).build()
+
+@flask_app.route("/")
+def index():
+    return "Bot is running ✅"
+
+@flask_app.route(WEBHOOK_PATH, methods=["POST"])
+async def webhook():
+    data = request.get_json(force=True)
+    update = Update.de_json(data, application.bot)
+    await application.process_update(update)
+    return "ok"
+
 # ================= MAIN =================
 
 def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("search", search))
+    application.add_handler(CommandHandler("stop", stop))
+    application.add_handler(CommandHandler("broadcast", broadcast))
+    application.add_handler(CallbackQueryHandler(callback_handler))
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("search", search))
-    app.add_handler(CommandHandler("stop", stop))
-    app.add_handler(CommandHandler("broadcast", broadcast))
-
-    app.add_handler(CallbackQueryHandler(callback_handler))
-
-    # 🔴 broadcast ФАҚАТ админ
-    app.add_handler(
+    application.add_handler(
         MessageHandler(filters.User(ADMIN_ID) & ~filters.COMMAND, broadcast_handler),
         group=0
     )
 
-    # 🟢 relay ҲАМАИ КОРБАРОН
-    app.add_handler(
+    application.add_handler(
         MessageHandler(filters.ALL & ~filters.COMMAND, relay),
         group=1
     )
 
-    logger.info("Bot started")
-    app.run_polling()
+    application.run_webhook(
+        listen="0.0.0.0",
+        port=int(os.environ.get("PORT", 10000)),
+        url_path=WEBHOOK_PATH,
+        webhook_url=WEBHOOK_URL,
+    )
 
 if __name__ == "__main__":
     main()
