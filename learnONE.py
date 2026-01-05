@@ -476,5 +476,8 @@ def main():
     )
 
 if __name__ == "__main__":
-    main()
+    logger.info("Starting webhook...")
+    application.bot.set_webhook(WEBHOOK_URL)
+    flask_app.run(host="0.0.0.0", port=PORT)
+
 
