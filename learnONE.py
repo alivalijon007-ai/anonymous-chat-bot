@@ -13,12 +13,12 @@ from telegram.ext import (
 
 # ================= CONFIG =================
 
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
+BOT_TOKEN = os.environ["BOT_TOKEN"]
 ADMIN_ID = 6604953148
 
-WEBHOOK_PATH = "/webhook"
-WEBHOOK_URL = os.environ.get("WEBHOOK_URL") + WEBHOOK_PATH
 PORT = int(os.environ.get("PORT", 10000))
+WEBHOOK_PATH = "/webhook"
+WEBHOOK_URL = os.environ["WEBHOOK_URL"] + WEBHOOK_PATH
 
 # ================= LOGGING =================
 
@@ -53,9 +53,8 @@ TEXTS = {
             "/search нависед барои ҷустуҷӯ"
         ),
         "search": "🔍 Дар ҷустуҷӯи шарик...\n/stop — қатъ",
-        "found": "✅ Шарик ёфт шуд! Метавонед суҳбат кунед.\n/stop — қатъ",
+        "found": "✅ Шарик ёфт шуд!\n/stop — қатъ",
         "stop": "❌ Чат қатъ шуд.\n/search — дубора",
-        "searchemo": "🔍",
     },
     "fa": {
         "choose_lang": "زبان را انتخاب کنید:",
@@ -72,14 +71,13 @@ TEXTS = {
         "search": "🔍 در حال جستجو...\n/stop — توقف",
         "found": "✅ شریک پیدا شد!\n/stop — توقف",
         "stop": "❌ چت متوقف شد.\n/search — دوباره",
-        "searchemo": "🔍",
     }
 }
 
 def t(user_id, key):
     return TEXTS.get(USER_LANG.get(user_id, "tj"), TEXTS["tj"])[key]
 
-# ================= START =================
+# ================= HANDLERS =================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -96,8 +94,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Choose language / Забонро интихоб кунед",
         reply_markup=kb
     )
-
-# ================= CALLBACK =================
 
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -121,8 +117,6 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         USER_GENDER[user_id] = q.data.split(":")[1]
         await q.edit_message_text(t(user_id, "start"))
 
-# ================= SEARCH =================
-
 async def search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     USERS.add(user_id)
@@ -130,14 +124,10 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_id in PAIRS or user_id in SEARCHING:
         return
 
-    # матн
     await update.message.reply_text(t(user_id, "search"))
-    # emoji дар паёми алоҳида
-    await update.message.reply_text(t(user_id, "searchemo"))
 
     if SEARCHING:
         other = SEARCHING.pop(0)
-
         PAIRS[user_id] = other
         PAIRS[other] = user_id
 
@@ -145,8 +135,6 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(other, t(other, "found"))
     else:
         SEARCHING.append(user_id)
-
-# ================= STOP =================
 
 async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -163,11 +151,8 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(user_id, t(user_id, "stop"))
         await context.bot.send_message(partner, t(partner, "stop"))
 
-# ================= RELAY =================
-
 async def relay(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-
     if user_id not in PAIRS:
         return
 
@@ -184,8 +169,6 @@ async def relay(update: Update, context: ContextTypes.DEFAULT_TYPE):
             caption=update.message.caption
         )
 
-# ================= BROADCAST =================
-
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
@@ -196,7 +179,6 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def broadcast_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
-
     if not ADMIN_STATE.get(ADMIN_ID):
         return
 
@@ -225,7 +207,6 @@ def main():
     app.add_handler(CommandHandler("search", search))
     app.add_handler(CommandHandler("stop", stop))
     app.add_handler(CommandHandler("broadcast", broadcast))
-
     app.add_handler(CallbackQueryHandler(callback_handler))
 
     app.add_handler(
@@ -239,7 +220,6 @@ def main():
     )
 
     logger.info("Starting webhook...")
-
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
